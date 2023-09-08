@@ -1,15 +1,13 @@
 import tensorflow as tf
 from tensorflow.keras.datasets import mnist, cifar10
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, AveragePooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
 from tensorflow.keras.models import load_model
-from tensorflow.keras.initializers import glorot_uniform
-from tensorflow.keras.layers import Conv2D, AveragePooling2D, Flatten, Dense, Dropout, MaxPool2D, Activation
-from tensorflow.keras.regularizers import l2  # Importar a regularização L2
 
 
 def load_data(dataset_name):
@@ -42,51 +40,23 @@ def evaluate_model(model, x_test, y_test):
     print(f"Acurácia Geral: {accuracy}")
 
 
-def build_alexnet_model(input_shape, learning_rate):
-
-    weight_decay=0.0005
+def build_lenet_model(input_shape, learning_rate=0.001):
     model = Sequential()
-
-    model.add(Conv2D(filters=96, input_shape=input_shape, kernel_size=(11, 11), strides=(4, 4), padding='valid',
-                     kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-    model.add(MaxPool2D(pool_size=(3, 3), strides=(2, 2), padding='same'))
-
-
-    model.add(Conv2D(filters=256, kernel_size=(5, 5), strides=(1, 1), padding='same', kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-    model.add(MaxPool2D(pool_size=(3, 3), strides=(2, 2), padding='same'))
-
-    model.add(Conv2D(filters=384, kernel_size=(3, 3), strides=(1, 1), padding='same', kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-    model.add(Conv2D(filters=384, kernel_size=(3, 3), strides=(1, 1), padding='same', kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-
-
-    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1), padding='same', kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-    model.add(MaxPool2D(pool_size=(3, 3), strides=(2, 2), padding='same'))
-
+    model.add(Conv2D(6, kernel_size=(5, 5), activation='tanh', input_shape=input_shape))
+    model.add(AveragePooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(16, kernel_size=(5, 5), activation='tanh'))
+    model.add(AveragePooling2D(pool_size=(2, 2)))
     model.add(Flatten())
+    model.add(Dense(120, activation='tanh'))
+    model.add(Flatten())
+    model.add(Dense(84, activation='tanh'))
+    model.add(Dense(10, activation='softmax'))
 
-    model.add(Dense(4096, input_shape=(227 * 227 * 3,), kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.4))
-
-    model.add(Dense(4096, kernel_regularizer=l2(weight_decay)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.4))
-
-    model.add(Dense(units=1000, activation="relu"))
-
-
-    model.add(Dense(units=10, activation="softmax"))
-
-    model.compile(loss='categorical_crossentropy', optimizer=tf.keras.optimizers.Adam(lr=learning_rate),
-                  metrics=['accuracy'])
+    optimizer = Adam(learning_rate=learning_rate)
+    model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
     model.summary()
-    history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test, y_test), verbose=1)
-    return model, history
+    return model
+
 
 def plot_loss(history):
     plt.plot(history.history['loss'], label='Treinamento')
@@ -96,14 +66,18 @@ def plot_loss(history):
     plt.legend()
     plt.show()
 
+
 def evaluate_saved_model(model_filename, x_test, y_test):
+    # Carregar o modelo treinado a partir do arquivo HDF5
     model = load_model(model_filename)
+
+    # Avaliar o modelo no conjunto de teste
     loss, accuracy = model.evaluate(x_test, y_test)
     return loss, accuracy
 
 
 if __name__ == "__main__":
-    datasets = ["mnist", "cifar10"]
+    datasets = ["cifar10"]  # ["mnist","cifar10"]
     learning_rates = [0.01, 0.001]
     batch_sizes = [64, 128]
     epochs = 20
@@ -115,7 +89,10 @@ if __name__ == "__main__":
         for lr in learning_rates:
             for batch_size in batch_sizes:
                 print(f"Dataset: {dataset_name}, Taxa de Aprendizado: {lr}, Tamanho do Lote: {batch_size}")
-                model, history = build_alexnet_model(input_shape, lr)
+                model = build_lenet_model(input_shape, lr)
+
+                history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size,
+                                    validation_data=(x_test, y_test), verbose=1)
 
                 plot_loss(history)
 
@@ -127,20 +104,20 @@ if __name__ == "__main__":
                 evaluate_model(model, x_test, y_test)
                 plot_confusion_matrix(y_true_classes, y_pred_classes)
 
+                # Salvar o modelo em disco
+                model.save(f"{dataset_name}_lenet_model_lr_{lr}_batch_{batch_size}.h5")
 
-                model.save(f"{dataset_name}_alexnet_model_lr_{lr}_batch_{batch_size}.h5")
-
-
-                loss, accuracy = evaluate_saved_model(f"{dataset_name}_alexnet_model_lr_{lr}_batch_{batch_size}.h5",
+                # Avaliar o modelo diretamente aqui
+                loss, accuracy = evaluate_saved_model(f"{dataset_name}_lenet_model_lr_{lr}_batch_{batch_size}.h5",
                                                       x_test, y_test)
                 accuracies.append(accuracy)
-                model_labels.append(f"{dataset_name} Alexnet LR={lr}, Batch={batch_size}")
+                model_labels.append(f"{dataset_name} LeNet LR={lr}, Batch={batch_size}")
 
-
+    # Criar um gráfico de barras para comparar as acurácias dos modelos
     plt.figure(figsize=(10, 6))
     plt.barh(model_labels, accuracies, color='green')
     plt.xlabel('Acurácia')
     plt.title('Acurácia dos Modelos')
-    plt.xlim(0.0, 1.0)
-    plt.gca().invert_yaxis()
+    plt.xlim(0.0, 1.0)  # Defina os limites do eixo x
+    plt.gca().invert_yaxis()  # Inverta a ordem dos modelos no eixo y
     plt.show()

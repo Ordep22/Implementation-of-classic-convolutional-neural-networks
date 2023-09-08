@@ -1,142 +1,142 @@
-#Sequential from keras.models, this gets our neral networks as Sequential noetworks.
-#As we know, it can be sequential layers or graphs
-import keras,os
-from keras.models import  Sequential
 import tensorflow as tf
-
-#We are working with images. All the images are basically 2D
-#One can go with the 3D if working with videos.
-from keras.layers import Conv2D
-
-#Avarege Pooling, Sum Poolong and Max Pooling are there.
-#We choose Max pooling. Re collect all what I tought you. From Keras. Layers import
-from keras.layers import MaxPool2D
-
-#Well, we must flatten. It is the process of conversion all the resultant 2D arrays single long continuos liner vector.
-#This is mandatory, folks
-from keras.layers import Flatten
-
-#This is the last step! Yes, full connection of the neral network is performed with thei Dense.
-from keras.layers import Dense
-
-#We are goig to use ImageDataGenerator from Keras and hence import it as well! It helps in rescale, rotate, zoom, flip etc.
-from keras.preprocessing.image import  ImageDataGenerator
-
-from matplotlib import  pyplot as plt
-
+from tensorflow.keras.datasets import mnist, cifar10
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
 import numpy as np
-
-mnist  = tf.keras.datasets.mnist
-
-(x_train, y_train), (x_test, y_test) = mnist.load_data()
-
-rows, cols  = 28,28
-
-x_train = x_train.reshape(x_train.shape[0],rows,cols,1)
-x_test = x_test.reshape(x_test.shape[0],rows,cols,1)
-
-input_shape = (rows, cols, 1)
-
-#Normalize datas
-x_train = x_train.astype('float32')
-x_test = x_test.astype('float32')
-x_train  = x_train  /255.0
-x_test = x_test /255.0
-
-#One- hot encde the labels
-y_train = tf.keras.utils.to_categorical(y_train,10)
-y_test = tf.keras.utils.to_categorical(y_test,10)
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+from tensorflow.keras.models import load_model
+from tensorflow.keras.initializers import glorot_uniform
+from tensorflow.keras.layers import Conv2D, AveragePooling2D, Flatten, Dense, Dropout, MaxPool2D, Activation
+from tensorflow.keras.regularizers import l2  # Importar a regularização L2
 
 
-def VggNet(input_shape):
+def load_data(dataset_name):
+    if dataset_name == "mnist":
+        (x_train, y_train), (x_test, y_test) = mnist.load_data()
+        input_shape = (28, 28, 1)
+    elif dataset_name == "cifar10":
+        (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+        input_shape = (32, 32, 3)
 
-    #Can we initialize the CNN and start the real coding?
+    x_train = x_train.astype('float32') / 255.0
+    x_test = x_test.astype('float32') / 255.0
+    y_train = tf.keras.utils.to_categorical(y_train, 10)
+    y_test = tf.keras.utils.to_categorical(y_test, 10)
+    return x_train, y_train, x_test, y_test, input_shape
+
+
+def plot_confusion_matrix(y_true, y_pred):
+    confusion_mtx = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(confusion_mtx, annot=True, fmt='d', cmap='Blues',
+                xticklabels=range(10), yticklabels=range(10))
+    plt.xlabel('Previsão')
+    plt.ylabel('Verdadeiro')
+    plt.show()
+
+
+def evaluate_model(model, x_test, y_test):
+    _, accuracy = model.evaluate(x_test, y_test, verbose=0)
+    print(f"Acurácia Geral: {accuracy}")
+
+
+def build_VGG_model(input_shape, learning_rate):
+
     model = Sequential()
-
-
     model.add(Conv2D(input_shape= input_shape,filters=64,kernel_size=(3,3),padding="same",activation= "relu"))
     model.add(Conv2D(filters=64, kernel_size=(3,3),padding="same",activation= "relu"))
-    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
+    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2),padding='same'))
 
-    #Flow the same procedure
     model.add(Conv2D(filters=128, kernel_size=(3, 3), padding="same", activation="relu"))
     model.add(Conv2D(filters=128, kernel_size=(3, 3), padding="same", activation="relu"))
-    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2),padding='same'))
 
-    #Flow the same procedure
+
     model.add(Conv2D(filters=256, kernel_size=(3, 3), padding="same", activation="relu"))
     model.add(Conv2D(filters=256, kernel_size=(3, 3), padding="same", activation="relu"))
     model.add(Conv2D(filters=256, kernel_size=(3, 3), padding="same", activation="relu"))
-    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2),padding='same'))
 
-    # Flow the same procedure
-    model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
-    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2)))
 
-    # Flow the same procedure
     model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
     model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
     model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
-    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2),padding='same'))
 
-    #Here, what we are basically doing here is taking the 2-D array,
-    #i.e pooled image pixels and converting them to a one dimensional single vector.
-    model.load_weights('vggweights.h5')
-    for layer in model.layers:
-        layer.trainable = False
+
+    model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
+    model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
+    model.add(Conv2D(filters=512, kernel_size=(3, 3), padding="same", activation="relu"))
+    model.add(MaxPool2D(pool_size=(2, 2), strides=(2, 2),padding='same'))
+
     model.add(Flatten())
-
-    model.add(Dense(units=256,activation="relu"))
     model.add(Dense(units=256, activation="relu"))
-    model.add(Dense(units=2, activation="softmax"))
+    model.add(Dense(units=10,activation="relu"))
+    model.add(Dense(units=10, activation="softmax"))
+    model.compile(loss='categorical_crossentropy', optimizer=tf.keras.optimizers.Adam(lr=learning_rate),
+                  metrics=['accuracy'])
+    model.summary()
 
-    model.compile(optimizer='adam',loss = keras.losses.categorical_crossentropy,metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer=tf.keras.optimizers.Adam(lr=learning_rate),
+                  metrics=['accuracy'])
+    model.summary()
+    history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test, y_test), verbose=1)
+    return model, history
 
-    return model
+def plot_loss(history):
+    plt.plot(history.history['loss'], label='Treinamento')
+    plt.plot(history.history['val_loss'], label='Validação')
+    plt.xlabel('Épocas')
+    plt.ylabel('Perda')
+    plt.legend()
+    plt.show()
 
+def evaluate_saved_model(model_filename, x_test, y_test):
 
-#We build it!
-vggNet  = VggNet(input_shape)
-
-#Number of epochs
-epochs  = 10
-
-#Can we train the model
-history  = vggNet.fit(x_train,y_train,steps_per_epoch=100,epochs = epochs, batch_size= 128, verbose=1)
-
-loss, acc  = vggNet.evaluate(x_test, y_test)
-
-#Here is the most important thing to be learnet!
-#Epochs - what is it? Simple, epoch is once all the images are processes one time individually
-#Both forward and backward to the network.
-#Epoch number can be determined by the trail and error.
-
-print("Accuracy: ", acc)
-
-
-#Trasnformation/ Reshape into 28x28 pixel
-x_train = x_train.reshape(x_train.shape[0],28,28)
-print("Trainnig Data",x_train.shape,y_train.shape)
-
-x_test = x_test.reshape(x_test.shape[0],28,28)
-print("Test Data", x_test.shape,y_test.shape)
-
-#To visualize a simgle image at the index
-imge_index  = 4444
-plt.imshow(x_test[imge_index].reshape(28,28),cmap = 'Greys')
-
-#To predict the output using the lenet model built
-pred  = vggNet.predict(x_test[imge_index].reshape(1,rows,cols, 1))
-print(pred.argmax())
+    model = load_model(model_filename)
+    loss, accuracy = model.evaluate(x_test, y_test)
+    return loss, accuracy
 
 
+if __name__ == "__main__":
+    datasets = ["mnist", "cifar10"]
+    learning_rates = [0.01, 0.001]
+    batch_sizes = [64, 128]
+    epochs = 20
+    accuracies = []
+    model_labels = []
+
+    for dataset_name in datasets:
+        x_train, y_train, x_test, y_test, input_shape = load_data(dataset_name)
+        for lr in learning_rates:
+            for batch_size in batch_sizes:
+                print(f"Dataset: {dataset_name}, Taxa de Aprendizado: {lr}, Tamanho do Lote: {batch_size}")
+                model, history = build_VGG_model(input_shape, lr)
+
+                plot_loss(history)
+
+                y_pred = model.predict(x_test)
+                y_pred_classes = np.argmax(y_pred, axis=1)
+
+                y_true_classes = np.argmax(y_test, axis=1)
+
+                evaluate_model(model, x_test, y_test)
+                plot_confusion_matrix(y_true_classes, y_pred_classes)
+
+                model.save(f"{dataset_name}_vgg_model_lr_{lr}_batch_{batch_size}.h5")
+
+                loss, accuracy = evaluate_saved_model(f"{dataset_name}_vgg_model_lr_{lr}_batch_{batch_size}.h5",
+                                                      x_test, y_test)
+                accuracies.append(accuracy)
+                model_labels.append(f"{dataset_name} vgg LR={lr}, Batch={batch_size}")
 
 
-
-
-
-
-
-
+    plt.figure(figsize=(10, 6))
+    plt.barh(model_labels, accuracies, color='green')
+    plt.xlabel('Acurácia')
+    plt.title('Acurácia dos Modelos')
+    plt.xlim(0.0, 1.0)
+    plt.gca().invert_yaxis()  
+    plt.show()
